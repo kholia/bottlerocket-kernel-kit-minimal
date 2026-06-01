@@ -1,3 +1,5 @@
+# tools/qemu-smoke-kernel-6.18.sh --no-build --no-config --no-kvm --append "console=ttyS0 earlyprintk=serial panic=0 root=/dev/vda ro rootfstype=ext4 rootwait init=/init smoke_poweroff=1"
+
 TOP := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(TOP)tools
 TWOLITER_DIR := $(TOOLS_DIR)/twoliter
@@ -9,12 +11,22 @@ TWOLITER_SHA256_AARCH64 ?= "474b6dce0ddd993e926065baee55c8a06167615cb2c0513c2c9f
 TWOLITER_SHA256_X86_64 ?= "f7239b329ae71f75e5f3262e6b83c0a96bf36bfed1dda225fc3998316b5a92d9"
 KIT ?= bottlerocket-kernel-kit
 UNAME_ARCH = $(shell uname -m)
-ARCH ?= $(UNAME_ARCH)
+ifeq ($(UNAME_ARCH), arm64)
+	HOST_ARCH = aarch64
+else
+	HOST_ARCH = $(UNAME_ARCH)
+endif
+ARCH ?= $(HOST_ARCH)
 VENDOR ?= bottlerocket
 SDK ?= ""
+KERNEL_CONFIG_ARGS ?=
 
-ifeq ($(UNAME_ARCH), aarch64)
+ifeq ($(HOST_ARCH), aarch64)
 	TWOLITER_SHA256=$(TWOLITER_SHA256_AARCH64)
+	SDK_PLATFORM ?= linux/arm64
+else ifeq ($(HOST_ARCH), x86_64)
+	TWOLITER_SHA256=$(TWOLITER_SHA256_X86_64)
+	SDK_PLATFORM ?= linux/amd64
 else
 	TWOLITER_SHA256=$(TWOLITER_SHA256_X86_64)
 endif
@@ -23,7 +35,13 @@ endif
 all: build
 
 full-config:
-	SDK=$(SDK) ./tools/docker-run.sh "/bottlerocket-kernel-kit/tools/latest-kernel-full-config.sh"
+	SDK=$(SDK) SDK_PLATFORM=$(SDK_PLATFORM) ./tools/docker-run.sh "/bottlerocket-kernel-kit/tools/latest-kernel-full-config.sh" $(KERNEL_CONFIG_ARGS)
+
+full-config-kernel-6.18:
+	SDK=$(SDK) SDK_PLATFORM=$(SDK_PLATFORM) ./tools/docker-run.sh "/bottlerocket-kernel-kit/tools/latest-kernel-full-config.sh" --kernel 6.18 $(KERNEL_CONFIG_ARGS)
+
+full-config-kernel-6.18-lkrg:
+	SDK=$(SDK) SDK_PLATFORM=$(SDK_PLATFORM) ./tools/docker-run.sh "/bottlerocket-kernel-kit/tools/latest-kernel-full-config.sh" --kernel 6.18 --with-lkrg
 
 prep:
 	@mkdir -p $(TWOLITER_DIR)
@@ -61,4 +79,4 @@ endif
 twoliter: prep
 	@$(TWOLITER_MAKE) $(TWOLITER_MAKE_ARGS)
 
-.PHONY: prep update fetch build publish twoliter full-config
+.PHONY: prep update fetch build publish twoliter full-config full-config-kernel-6.18 full-config-kernel-6.18-lkrg

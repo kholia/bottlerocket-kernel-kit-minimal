@@ -1,0 +1,27 @@
+# LKRG support is opt-in.  It opens a narrow module-loading window so LKRG can
+# be loaded at boot; the runtime service disables further module loads after
+# modprobe succeeds.
+CONFIG_MODULES=y
+
+# Keep module support as small as possible.  LKRG is the only module intended to
+# be built and shipped by this kernel package, and it is signed during the
+# package build.  LKRG requires module unload support at build time; the boot
+# loader service disables further module load and unload operations after LKRG
+# is inserted.
+CONFIG_MODULE_UNLOAD=y
+# CONFIG_MODULE_FORCE_LOAD is not set
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_ALL=y
+CONFIG_MODULE_SIG_SHA512=y
+CONFIG_MODULE_SIG_HASH="sha512"
+# CONFIG_MODVERSIONS is not set
+# CONFIG_DEBUG_INFO_BTF_MODULES is not set
+
+# LKRG relies on runtime symbol/probe/tracing infrastructure.
+CONFIG_KALLSYMS=y
+CONFIG_KALLSYMS_ALL=y
+CONFIG_KPROBES=y
+CONFIG_FTRACE=y
+CONFIG_JUMP_LABEL=y
+CONFIG_SYSCTL=y

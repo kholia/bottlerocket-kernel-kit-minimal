@@ -1,4 +1,11 @@
 /build
+!/build/
+/build/*
+!/build/rpms/
+/build/rpms/*
+!/build/rpms/kernel-6.18/
+/build/rpms/kernel-6.18/*
+!/build/rpms/kernel-6.18/bottlerocket-kernel-6.18-[0-9]*.x86_64.rpm
 *.tar.*
 *.tgz
 **/target/

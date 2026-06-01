@@ -17,5 +17,10 @@ url = "https://cdn.amazonlinux.com/al2023/blobstore/f82452e4fddb3f26f08c0c3c3e73
 sha512 = "53a9953abbcf9fa9dad851233e5a8814ea85d08d233792eced6fae57579ddf82945894397bc8611ce813e7d68a12c15c25c45618ccc3e8194cb0b04fba2bffef"
 force-upstream = true
 
+[[package.metadata.build-package.external-files]]
+url = "https://download.openwall.net/pub/projects/lkrg/lkrg-1.0.1.tar.gz"
+sha512 = "2c694b0a4349142a4ab3a52133cbcbb71412b53dfefe1003506ede3c49111eafd4d70ea447bb24865954bd9884759c0e3a4429aa9db3e534c5b793f84ec3592c"
+force-upstream = true
+
 [build-dependencies]
 microcode = { path = "../microcode" }

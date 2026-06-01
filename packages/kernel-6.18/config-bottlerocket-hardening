@@ -1,0 +1,195 @@
+# Hard exclusions for the minimal Bottlerocket kernel.
+#
+# Keep these last in the merge order so that neither the Amazon Linux base
+# config nor Bottlerocket compatibility restores can re-enable them.
+
+# Module loading is intentionally unavailable.  This removes the runtime module
+# loader and forces required kernel features to be compiled into vmlinux.
+# CONFIG_MODULES is not set
+# CONFIG_MODULE_UNLOAD is not set
+# CONFIG_MODULE_SIG is not set
+# CONFIG_MODVERSIONS is not set
+# CONFIG_DEBUG_INFO_BTF_MODULES is not set
+
+# The container runtime does not require unprivileged user namespaces, and they
+# materially expand the kernel attack surface.
+# CONFIG_USER_NS is not set
+
+# Checkpoint/restore support is not part of Bottlerocket's supported host
+# contract and pulls in process introspection helpers we do not need.
+# CONFIG_CHECKPOINT_RESTORE is not set
+
+# io_uring is a large async I/O subsystem with a history of security-sensitive
+# bugs. Keep the classic AIO/poll/eventfd interfaces for workload compatibility.
+# CONFIG_IO_URING is not set
+# CONFIG_IO_URING_MOCK_FILE is not set
+# CONFIG_IO_URING_ZCRX is not set
+# CONFIG_IO_URING_BPF is not set
+# CONFIG_FUSE_IO_URING is not set
+# CONFIG_IO_WQ is not set
+
+# The BPF preload module is sample infrastructure; Bottlerocket needs BPF
+# runtime support for networking/observability, not a preloaded example object.
+# CONFIG_BPF_PRELOAD is not set
+
+# Production built-in hardening. These checks and randomization features are
+# safe for the Bottlerocket host contract and avoid debug-only or
+# compatibility-sensitive options such as free-time heap zeroing, randstruct,
+# static usermodehelper routing, and enforced page-table checking.
+CONFIG_SECURITY_DMESG_RESTRICT=y
+CONFIG_SLAB_FREELIST_RANDOM=y
+CONFIG_SLAB_FREELIST_HARDENED=y
+CONFIG_SLAB_BUCKETS=y
+CONFIG_RANDOM_KMALLOC_CACHES=y
+CONFIG_SHUFFLE_PAGE_ALLOCATOR=y
+CONFIG_INIT_STACK_ALL_ZERO=y
+CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y
+CONFIG_ZERO_CALL_USED_REGS=y
+CONFIG_FORTIFY_SOURCE=y
+CONFIG_HARDENED_USERCOPY=y
+CONFIG_HARDENED_USERCOPY_DEFAULT_ON=y
+CONFIG_LIST_HARDENED=y
+CONFIG_BUG_ON_DATA_CORRUPTION=y
+CONFIG_DEBUG_WX=y
+CONFIG_STRICT_DEVMEM=y
+CONFIG_IO_STRICT_DEVMEM=y
+
+# Server-side network filesystems and less common network protocol stacks are
+# not part of this kernel target.  Keep NFS/Ceph clients in config-bottlerocket
+# for volume compatibility, but exclude NFS/SMB servers, SMB/CIFS clients, IPsec
+# transform plumbing, SCTP/GRE/UDPLite helpers, MPLS, and protocol parsers.
+# CONFIG_NFSD is not set
+# CONFIG_NFSD_V2 is not set
+# CONFIG_NFSD_V3 is not set
+# CONFIG_NFSD_V3_ACL is not set
+# CONFIG_NFSD_V4 is not set
+# CONFIG_NFSD_V4_2_INTER_SSC is not set
+# CONFIG_NFSD_V4_SECURITY_LABEL is not set
+# CONFIG_NFS_V4_2 is not set
+# CONFIG_NFS_V4_2_SSC_HELPER is not set
+# CONFIG_NFS_V4_SECURITY_LABEL is not set
+# CONFIG_SMB_SERVER is not set
+# CONFIG_SMB_SERVER_SMBDIRECT is not set
+# CONFIG_KSMBD is not set
+# CONFIG_CIFS is not set
+# CONFIG_SMBFS is not set
+# CONFIG_DLM is not set
+# CONFIG_SECURITY_NETWORK_XFRM is not set
+# CONFIG_XFRM is not set
+# CONFIG_XFRM_USER is not set
+# CONFIG_XFRM_INTERFACE is not set
+# CONFIG_XFRM_STATISTICS is not set
+# CONFIG_XFRM_AH is not set
+# CONFIG_XFRM_ESP is not set
+# CONFIG_XFRM_IPCOMP is not set
+# CONFIG_INET_ESP is not set
+# CONFIG_INET_ESP_OFFLOAD is not set
+# CONFIG_INET_ESPINTCP is not set
+# CONFIG_INET6_AH is not set
+# CONFIG_INET6_ESP is not set
+# CONFIG_INET6_ESP_OFFLOAD is not set
+# CONFIG_INET6_ESPINTCP is not set
+# CONFIG_INET6_IPCOMP is not set
+# CONFIG_INET6_XFRM_TUNNEL is not set
+# CONFIG_INET6_TUNNEL is not set
+# CONFIG_IPV6_MIP6 is not set
+# CONFIG_IPV6_ILA is not set
+# CONFIG_IPV6_VTI is not set
+# CONFIG_IPV6_SIT is not set
+# CONFIG_IPV6_TUNNEL is not set
+# CONFIG_IPV6_FOU is not set
+# CONFIG_IPV6_FOU_TUNNEL is not set
+# CONFIG_IPV6_MROUTE is not set
+# CONFIG_IPV6_SEG6_LWTUNNEL is not set
+# CONFIG_IPV6_SEG6_HMAC is not set
+# CONFIG_IPV6_SEG6_BPF is not set
+# CONFIG_NFT_XFRM is not set
+# CONFIG_AF_RXRPC is not set
+# CONFIG_RXKAD is not set
+# CONFIG_NF_CT_PROTO_GRE is not set
+# CONFIG_NF_CT_PROTO_SCTP is not set
+# CONFIG_NF_CT_PROTO_UDPLITE is not set
+# CONFIG_NF_CONNTRACK_AMANDA is not set
+# CONFIG_NF_CONNTRACK_FTP is not set
+# CONFIG_NF_CONNTRACK_H323 is not set
+# CONFIG_NF_CONNTRACK_IRC is not set
+# CONFIG_NF_CONNTRACK_BROADCAST is not set
+# CONFIG_NF_CONNTRACK_NETBIOS_NS is not set
+# CONFIG_NF_CONNTRACK_SNMP is not set
+# CONFIG_NF_CONNTRACK_PPTP is not set
+# CONFIG_NF_CONNTRACK_SANE is not set
+# CONFIG_NF_CONNTRACK_SIP is not set
+# CONFIG_NF_CONNTRACK_TFTP is not set
+# CONFIG_NF_CT_NETLINK_HELPER is not set
+# CONFIG_NF_CT_NETLINK_TIMEOUT is not set
+# CONFIG_NF_NAT_AMANDA is not set
+# CONFIG_NF_NAT_FTP is not set
+# CONFIG_NF_NAT_H323 is not set
+# CONFIG_NF_NAT_IRC is not set
+# CONFIG_NF_NAT_PPTP is not set
+# CONFIG_NF_NAT_SIP is not set
+# CONFIG_NF_NAT_SNMP_BASIC is not set
+# CONFIG_NF_NAT_TFTP is not set
+# CONFIG_NETFILTER_NETLINK_OSF is not set
+# CONFIG_NFT_OSF is not set
+# CONFIG_NETFILTER_XT_MATCH_OSF is not set
+# CONFIG_NETFILTER_XT_MATCH_L2TP is not set
+# CONFIG_NETFILTER_XT_MATCH_POLICY is not set
+# CONFIG_NETFILTER_XT_MATCH_SCTP is not set
+# CONFIG_IP_VS_PROTO_SCTP is not set
+# CONFIG_OPENVSWITCH is not set
+# CONFIG_OPENVSWITCH_GRE is not set
+# CONFIG_OPENVSWITCH_VXLAN is not set
+# CONFIG_OPENVSWITCH_GENEVE is not set
+# CONFIG_MPLS is not set
+# CONFIG_NET_MPLS_GSO is not set
+# CONFIG_MPLS_ROUTING is not set
+# CONFIG_MPLS_IPTUNNEL is not set
+
+# Avoid optional crypto and keyring helpers that are not needed by dm-verity,
+# WireGuard, BPF, SELinux, or LKRG module signature verification.
+# CONFIG_TRUSTED_KEYS is not set
+# CONFIG_ENCRYPTED_KEYS is not set
+# CONFIG_PKCS8_PRIVATE_KEY_PARSER is not set
+# CONFIG_PKCS7_TEST_KEY is not set
+# CONFIG_CRYPTO_FIPS is not set
+# CONFIG_CRYPTO_FIPS140_EXTMOD is not set
+# CONFIG_CRYPTO_BENCHMARK is not set
+# CONFIG_CRYPTO_ANSI_CPRNG is not set
+# CONFIG_CRYPTO_MD5 is not set
+# CONFIG_CRYPTO_SHA1 is not set
+# CONFIG_CRYPTO_CCM is not set
+# CONFIG_CRYPTO_DEFLATE is not set
+# CONFIG_CRYPTO_SM3 is not set
+# CONFIG_CRYPTO_LIB_ARC4 is not set
+
+# GPU/display support is not needed for this target.
+# CONFIG_DRM is not set
+# CONFIG_FB is not set
+# CONFIG_DRM_SIMPLEDRM is not set
+
+# Accelerator networking and storage target stacks are excluded.  This kernel is
+# for GPU-less, module-less Bottlerocket systems without EFA/MLX/RDMA or iSCSI.
+# CONFIG_INFINIBAND is not set
+# CONFIG_INFINIBAND_USER_ACCESS is not set
+# CONFIG_INFINIBAND_USER_MAD is not set
+# CONFIG_INFINIBAND_ADDR_TRANS_CONFIGFS is not set
+# CONFIG_INFINIBAND_ISERT is not set
+# CONFIG_MLX5_CORE is not set
+# CONFIG_MLX5_INFINIBAND is not set
+# CONFIG_AMAZON_EFA_INFINIBAND is not set
+# CONFIG_INFINIBAND_EFA is not set
+# CONFIG_CONFIGFS_FS is not set
+# CONFIG_ISCSI_TCP is not set
+# CONFIG_ISCSI_BOOT_SYSFS is not set
+# CONFIG_SCSI_ISCSI_ATTRS is not set
+# CONFIG_TCM_USER2 is not set
+# CONFIG_ISCSI_TARGET is not set
+# CONFIG_SEV_GUEST is not set
+# CONFIG_TDX_GUEST_DRIVER is not set
+# CONFIG_ARM_CCA_GUEST is not set
+# CONFIG_TSM_REPORTS is not set
+# CONFIG_TSM_MEASUREMENTS is not set
+
+# No module loader is present, so force-loading modules is also unavailable.
+# CONFIG_MODULE_FORCE_LOAD is not set

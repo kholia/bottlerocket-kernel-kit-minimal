@@ -1,0 +1,17 @@
+[Unit]
+Description=Load LKRG and disable further module loading
+After=local-fs.target
+Requires=local-fs.target
+# Disable manual restarts so module loading is only opened during the boot path.
+RefuseManualStart=true
+RefuseManualStop=true
+
+[Service]
+Type=oneshot
+ExecStart=/bin/modprobe lkrg kint_enforce=1
+ExecStart=/bin/sh -c 'echo 1 > /proc/sys/kernel/modules_disabled'
+RemainAfterExit=true
+StandardError=journal+console
+
+[Install]
+RequiredBy=drivers.target

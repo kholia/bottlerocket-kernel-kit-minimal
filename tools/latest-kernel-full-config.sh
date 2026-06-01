@@ -8,7 +8,7 @@ MICROCODE_DIR="${KERNEL_KIT_DIR}/packages/microcode"
 # Usage information
 usage() {
     cat <<EOF
-Usage: $0
+Usage: $0 [--kernel <major.minor>] [--with-lkrg|--without-lkrg]
 
 This script generates and validates full kernel configurations for all available
 kernel versions in the Bottlerocket kernel kit.
@@ -17,6 +17,14 @@ IMPORTANT: This script is designed to run inside the Bottlerocket SDK container
 and should typically be invoked via the Makefile target:
 
     make full-config
+
+To limit work to kernel 6.18 only:
+
+    make full-config-kernel-6.18
+
+To generate the optional kernel 6.18 LKRG configuration:
+
+    make full-config-kernel-6.18-lkrg
 
 Running this script directly outside the SDK container will fail because it
 requires the proper build environment and mounted paths.
@@ -39,12 +47,34 @@ bail() {
     exit 1
 }
 
+kernel_filter=""
+with_lkrg=0
+
+normalize_kernel_filter() {
+    local kernel="$1"
+    kernel="${kernel#kernel-}"
+    echo "${kernel}"
+}
+
+kernel_dir_selected() {
+    local kernel_dir="$1"
+    local kernel_pkg
+    kernel_pkg=$(basename "${kernel_dir}")
+
+    [[ -z "${kernel_filter}" || "${kernel_pkg}" == "kernel-${kernel_filter}" ]]
+}
+
 # Get the config-full filename for a given kernel version and architecture
 get_kernel_config_file_name() {
     local majorminor="$1"
     local arch="$2"
+    local flavor="${3:-default}"
     if [[ "${majorminor}" == "6.18" ]]; then
-        echo "config-full-bottlerocket-${arch}-on-$(uname -m)"
+        if [[ "${flavor}" == "lkrg" ]]; then
+            echo "config-full-bottlerocket-lkrg-${arch}-on-$(uname -m)"
+        else
+            echo "config-full-bottlerocket-${arch}-on-$(uname -m)"
+        fi
     else
         echo "config-full-bottlerocket-${arch}"
     fi
@@ -56,6 +86,8 @@ fetch_sources() {
     # the running container is configured with the caller's UID which prevents
     # from installing tools at /home/builder/
     for kernel_dir in "${KERNEL_KIT_DIR}/packages"/kernel-*; do
+        kernel_dir_selected "${kernel_dir}" || continue
+
         pushd "${kernel_dir}" || bail "Unable to enter kernel directory '${kernel_dir}'"
         grep 'url =' "Cargo.toml" | while IFS= read -r url; do
             url=$(echo "${url#*\"}" | cut -d '"' -f 1)
@@ -75,23 +107,43 @@ generate_kernel_configs() {
     for arch in "x86_64" "aarch64"; do
         br_cfg="${kernel_path}/config-bottlerocket"
         br_cfg_arch="${kernel_path}/config-bottlerocket-${arch}"
+        br_cfg_minimal="${kernel_path}/config-minimal-bottlerocket"
+        br_cfg_hardening="${kernel_path}/config-bottlerocket-hardening"
+        br_cfg_lkrg="${kernel_path}/config-bottlerocket-lkrg"
         microcode_cfg="${MICROCODE_DIR}/${microcode_file}"
-        config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}")
+        if ((with_lkrg)); then
+            if [[ "${majorminor}" != "6.18" ]]; then
+                bail "--with-lkrg is only supported for kernel 6.18"
+            fi
+            config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}" "lkrg")
+        else
+            config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}")
+        fi
 
         pushd "linux-${version}" || bail "Could not move into linux-${version}"
 
         if [ "${arch}" = "aarch64" ]; then
             karch="arm64"
-            script_args=("../config-${arch}" "${br_cfg}" "${br_cfg_arch}")
+            script_args=("../config-${arch}" "${br_cfg_minimal}" "${br_cfg_arch}" "${br_cfg}" "${br_cfg_hardening}")
         elif [ "${arch}" = "x86_64" ]; then
             karch="x86"
-            script_args=("../config-${arch}" "${microcode_cfg}" "${br_cfg}" "${br_cfg_arch}")
+            script_args=("../config-${arch}" "${br_cfg_minimal}" "${microcode_cfg}" "${br_cfg_arch}" "${br_cfg}" "${br_cfg_hardening}")
         fi
 
         ARCH=${karch} \
             CROSS_COMPILE=/usr/bin/${arch}-bottlerocket-linux-gnu- \
             KCONFIG_CONFIG=bottlerocket_${arch}_defconfig \
             ./scripts/kconfig/merge_config.sh "${script_args[@]}"
+
+        if ((with_lkrg)); then
+            base_config="bottlerocket_${arch}_base_defconfig"
+            cp "bottlerocket_${arch}_defconfig" "${base_config}"
+            ARCH=${karch} \
+                CROSS_COMPILE=/usr/bin/${arch}-bottlerocket-linux-gnu- \
+                KCONFIG_CONFIG=bottlerocket_${arch}_defconfig \
+                ./scripts/kconfig/merge_config.sh "${base_config}" "${br_cfg_lkrg}"
+            rm -f "${base_config}"
+        fi
 
         mv -f "bottlerocket_${arch}_defconfig" "${kernel_path}/${config_filename}" || bail "Failed to create ${config_filename}"
         popd || bail "Could not move around - 'popd' failed in merge_config loop. Lets stop before we break anything further."
@@ -179,8 +231,27 @@ validate_kernel_configs() {
             ((++errors))
             continue
         fi
+        if [[ ! -f "${kernel_path}/config-minimal-bottlerocket" ]]; then
+            echo "❌ Missing config-minimal-bottlerocket"
+            ((++errors))
+            continue
+        fi
+        if [[ ! -f "${kernel_path}/config-bottlerocket-hardening" ]]; then
+            echo "❌ Missing config-bottlerocket-hardening"
+            ((++errors))
+            continue
+        fi
+        if ((with_lkrg)) && [[ ! -f "${kernel_path}/config-bottlerocket-lkrg" ]]; then
+            echo "❌ Missing config-bottlerocket-lkrg"
+            ((++errors))
+            continue
+        fi
         local config_filename
-        config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}")
+        if ((with_lkrg)); then
+            config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}" "lkrg")
+        else
+            config_filename=$(get_kernel_config_file_name "${majorminor}" "${arch}")
+        fi
         if [[ ! -f "${kernel_path}/${config_filename}" ]]; then
             echo "❌ Missing ${config_filename}"
             ((++errors))
@@ -189,11 +260,17 @@ validate_kernel_configs() {
 
         # Extract config lines (ignoring comments by default to avoid issues with removed kernel options)
         local common_configs
-        common_configs=$(grep "^CONFIG_" "${kernel_path}/config-bottlerocket" | sort)
+        common_configs=$(grep "^CONFIG_" "${kernel_path}/config-bottlerocket" | sort -u)
         local arch_configs
-        arch_configs=$(grep "^CONFIG_" "${kernel_path}/config-bottlerocket-${arch}" | sort)
+        arch_configs=$(grep "^CONFIG_" "${kernel_path}/config-bottlerocket-${arch}" | sort -u)
         local full_configs
-        full_configs=$(grep "^CONFIG_" "${kernel_path}/${config_filename}" | sort)
+        full_configs=$(grep "^CONFIG_" "${kernel_path}/${config_filename}" | sort -u)
+        local lkrg_configs=""
+        if ((with_lkrg)); then
+            lkrg_configs=$(grep "^CONFIG_" "${kernel_path}/config-bottlerocket-lkrg" | sort -u)
+        fi
+        local hardening_disabled_configs
+        hardening_disabled_configs=$(sed -n 's/^# \(CONFIG_[^ ]*\) is not set$/\1/p' "${kernel_path}/config-bottlerocket-hardening" | sort)
 
         # Check common configs
         local missing_common
@@ -201,6 +278,10 @@ validate_kernel_configs() {
         # Check arch-specific configs
         local missing_arch
         missing_arch=$(comm -23 <(echo "$arch_configs") <(echo "$full_configs"))
+        local missing_lkrg=""
+        if ((with_lkrg)); then
+            missing_lkrg=$(comm -23 <(echo "$lkrg_configs") <(echo "$full_configs"))
+        fi
 
         if [[ -n "$missing_common" ]]; then
             echo "❌ Missing common configs:"
@@ -214,7 +295,43 @@ validate_kernel_configs() {
             ((++errors))
         fi
 
-        if [[ -z "$missing_common" && -z "$missing_arch" ]]; then
+        if [[ -n "$missing_lkrg" ]]; then
+            echo "❌ Missing LKRG configs:"
+            echo "$missing_lkrg"
+            ((++errors))
+        fi
+
+        local hardening_violations=""
+        while IFS= read -r disabled_config; do
+            if ((with_lkrg)); then
+                case "${disabled_config}" in
+                CONFIG_MODULES | CONFIG_MODULE_SIG | CONFIG_MODULE_UNLOAD)
+                    continue
+                    ;;
+                esac
+            fi
+            if [[ -n "${disabled_config}" ]] && grep -q "^${disabled_config}=" "${kernel_path}/${config_filename}"; then
+                hardening_violations+="${disabled_config}"$'\n'
+            fi
+        done <<< "${hardening_disabled_configs}"
+
+        if [[ -n "$hardening_violations" ]]; then
+            echo "❌ Hardening configs unexpectedly enabled:"
+            echo "$hardening_violations"
+            ((++errors))
+        fi
+
+        local loadable_module_configs=""
+        if ((with_lkrg)); then
+            loadable_module_configs=$(grep "^CONFIG_.*=m$" "${kernel_path}/${config_filename}" || true)
+            if [[ -n "${loadable_module_configs}" ]]; then
+                echo "❌ Non-LKRG loadable module configs unexpectedly enabled:"
+                echo "${loadable_module_configs}"
+                ((++errors))
+            fi
+        fi
+
+        if [[ -z "$missing_common" && -z "$missing_arch" && -z "$missing_lkrg" && -z "$hardening_violations" && -z "$loadable_module_configs" ]]; then
             echo "✅ All configs present for ${arch}"
         fi
     done
@@ -234,14 +351,39 @@ while [[ $# -gt 0 ]]; do
         usage
         exit 0
         ;;
+    --kernel)
+        if [[ $# -lt 2 ]]; then
+            bail "--kernel requires a kernel major.minor value"
+        fi
+        kernel_filter=$(normalize_kernel_filter "$2")
+        shift 2
+        ;;
+    --kernel=*)
+        kernel_filter=$(normalize_kernel_filter "${1#--kernel=}")
+        shift
+        ;;
+    --with-lkrg)
+        with_lkrg=1
+        shift
+        ;;
+    --without-lkrg)
+        with_lkrg=0
+        shift
+        ;;
     *)
         echo "Unknown option: $1"
         usage
         exit 1
         ;;
     esac
-    shift
 done
+
+if ((with_lkrg)); then
+    if [[ -n "${kernel_filter}" && "${kernel_filter}" != "6.18" ]]; then
+        bail "--with-lkrg is only supported for kernel 6.18"
+    fi
+    kernel_filter="6.18"
+fi
 
 # Ensure this script is run within the Bottlerocket SDK container
 if [[ ! -d "${KERNEL_KIT_DIR}" ]]; then
@@ -259,6 +401,7 @@ for kernel_dir in "${KERNEL_KIT_DIR}/packages"/kernel-*; do
     if [[ ! -d "${kernel_dir}" ]]; then
         bail "No Kernel directory found for ${kernel_dir}"
     fi
+    kernel_dir_selected "${kernel_dir}" || continue
 
     kernel_pkg=$(basename "${kernel_dir}")
     # Multiple RPMs can coexist. Use version sorting to select the latest RPM.
@@ -291,5 +434,9 @@ done
 
 # Check if we found any RPMs at all
 if [ "${found_any_rpm}" -eq 0 ]; then
-    bail "No kernel RPMs found in any directory"
+    if [[ -n "${kernel_filter}" ]]; then
+        bail "No kernel RPMs found for kernel-${kernel_filter}"
+    else
+        bail "No kernel RPMs found in any directory"
+    fi
 fi

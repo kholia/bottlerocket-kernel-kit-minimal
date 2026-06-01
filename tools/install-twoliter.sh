@@ -134,9 +134,17 @@ fi
 
 if [ "${allow_bin}" = "true" ] ; then
    host_arch="$(uname -m)"
-   host_arch="${host_arch,,}"
+   host_arch="$(printf '%s' "${host_arch}" | tr '[:upper:]' '[:lower:]')"
+   case "${host_arch}" in
+      arm64)
+         host_arch="aarch64"
+         ;;
+      amd64)
+         host_arch="x86_64"
+         ;;
+   esac
    host_kernel="$(uname -s)"
-   host_kernel="${host_kernel,,}"
+   host_kernel="$(printf '%s' "${host_kernel}" | tr '[:upper:]' '[:lower:]')"
    case "${host_kernel}-${host_arch}" in
       linux-x86_64 | linux-aarch64)
       echo "Installing Twoliter from binary release."
@@ -145,7 +153,13 @@ if [ "${allow_bin}" = "true" ] ; then
       cd "${workdir}"
       curl -sSL "${twoliter_release}/twoliter-${twoliter_target}.tar.xz" -o "twoliter.tar.xz"
       echo "Checking binary checksum..."
-      sha256sum -c <<< "${bin_checksum} twoliter.tar.xz"
+      if command -v sha256sum >/dev/null 2>&1; then
+         sha256sum -c <<< "${bin_checksum} twoliter.tar.xz"
+      elif command -v shasum >/dev/null 2>&1; then
+         shasum -a 256 -c <<< "${bin_checksum}  twoliter.tar.xz"
+      else
+         bail "Neither sha256sum nor shasum is available for checksum verification."
+      fi
       tar xf twoliter.tar.xz
       mv "./twoliter-${twoliter_target}/twoliter" "${dir}"
       exit 0
@@ -159,6 +173,7 @@ else
 fi
 
 if [ "${from_source}" = "true" ] ; then
+   command -v cargo >/dev/null 2>&1 || bail "cargo is required to install Twoliter from source."
    echo "Installing Twoliter version ${version} from source"
    cargo +nightly install \
      -Z bindeps \
